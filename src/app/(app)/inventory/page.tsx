@@ -10,6 +10,7 @@ import {
   Loader2,
   AlertTriangle,
   AlertCircle,
+  X,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
@@ -239,6 +240,14 @@ function InventoryItemCard({ item }: { item: InventoryItem }) {
           {format(parseISO(item.expiry_date), "MMM d")}
         </div>
       )}
+
+      <button
+        onClick={() => deleteItem.mutate(item.id)}
+        disabled={deleteItem.isPending}
+        className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   )
 }
