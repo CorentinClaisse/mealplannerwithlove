@@ -1,12 +1,13 @@
 "use client"
 
-import { use } from "react"
+import { use, useState } from "react"
 import { useRouter } from "next/navigation"
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useRecipe, useToggleFavorite, useDeleteRecipe } from "@/hooks/use-recipes"
+import { AddToPlanModal } from "@/components/planner/add-to-plan-modal"
 import {
   ChevronLeft,
   Heart,
@@ -33,6 +34,7 @@ export default function RecipeDetailPage({
   const deleteRecipe = useDeleteRecipe()
 
   const recipe = data?.recipe
+  const [showAddToPlan, setShowAddToPlan] = useState(false)
 
   const handleDelete = async () => {
     if (confirm("Are you sure you want to delete this recipe?")) {
@@ -160,19 +162,24 @@ export default function RecipeDetailPage({
             )}
 
             {/* Actions */}
-            <div className="flex gap-2 pt-2 border-t">
-              <Button variant="outline" size="sm" className="flex-1">
-                <CalendarPlus className="w-4 h-4 mr-1" />
+            <div className="flex items-center gap-2 pt-3 border-t">
+              <Button
+                variant="outline"
+                className="flex-1 h-10"
+                onClick={() => setShowAddToPlan(true)}
+              >
+                <CalendarPlus className="w-4 h-4 mr-2" />
                 Add to plan
               </Button>
               <Link href={`/recipes/${id}/edit`}>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="icon" className="h-10 w-10">
                   <Edit className="w-4 h-4" />
                 </Button>
               </Link>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="h-10 w-10"
                 onClick={handleDelete}
                 disabled={deleteRecipe.isPending}
               >
@@ -254,6 +261,13 @@ export default function RecipeDetailPage({
           </p>
         )}
       </div>
+
+      {/* Add to Plan Modal */}
+      <AddToPlanModal
+        open={showAddToPlan}
+        onOpenChange={setShowAddToPlan}
+        recipe={recipe}
+      />
     </div>
   )
 }
