@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import OpenAI from "openai"
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    return null
+  }
+  return new OpenAI({ apiKey })
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createClient() as any
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -19,6 +23,11 @@ export async function POST(request: NextRequest) {
 
     if (!title) {
       return NextResponse.json({ error: "Recipe title is required" }, { status: 400 })
+    }
+
+    const openai = getOpenAIClient()
+    if (!openai) {
+      return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 })
     }
 
     // Build a prompt for the image
@@ -34,7 +43,7 @@ export async function POST(request: NextRequest) {
       quality: "standard",
     })
 
-    const imageUrl = response.data[0]?.url
+    const imageUrl = response.data?.[0]?.url
 
     if (!imageUrl) {
       return NextResponse.json({ error: "Failed to generate image" }, { status: 500 })
