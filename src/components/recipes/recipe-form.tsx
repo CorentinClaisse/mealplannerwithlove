@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,6 +21,8 @@ import {
   Loader2,
   GripVertical,
   X,
+  Sparkles,
+  ImageIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils/cn"
 
@@ -85,6 +88,8 @@ export function RecipeForm({ recipe, mode = "create" }: RecipeFormProps) {
   const createRecipe = useCreateRecipe()
   const updateRecipe = useUpdateRecipe()
   const [tagInput, setTagInput] = useState("")
+  const [generatedImage, setGeneratedImage] = useState<string | null>(recipe?.image_url || null)
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
 
   const isLoading = createRecipe.isPending || updateRecipe.isPending
 
@@ -180,9 +185,47 @@ export function RecipeForm({ recipe, mode = "create" }: RecipeFormProps) {
     )
   }
 
+  const generateAIImage = async () => {
+    const title = watch("title")
+    const description = watch("description")
+    const ingredients = watch("ingredients")
+
+    if (!title) {
+      alert("Please enter a recipe title first")
+      return
+    }
+
+    setIsGeneratingImage(true)
+    try {
+      const response = await fetch("/api/recipes/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipeId: recipe?.id,
+          title,
+          description,
+          ingredients: ingredients.map((i) => i.name).filter(Boolean),
+        }),
+      })
+
+      const data = await response.json()
+      if (data.imageUrl) {
+        setGeneratedImage(data.imageUrl)
+      } else {
+        alert("Failed to generate image: " + (data.error || "Unknown error"))
+      }
+    } catch (error) {
+      console.error("Failed to generate image:", error)
+      alert("Failed to generate image")
+    } finally {
+      setIsGeneratingImage(false)
+    }
+  }
+
   const onSubmit = async (data: FormValues) => {
     const formData: RecipeFormData = {
       ...data,
+      imageUrl: generatedImage || undefined,
       ingredients: data.ingredients.map((ing) => ({
         ...ing,
         quantity: ing.quantity || undefined,
@@ -208,6 +251,61 @@ export function RecipeForm({ recipe, mode = "create" }: RecipeFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pb-8">
+      {/* AI Image Generation */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center gap-4">
+            {generatedImage ? (
+              <div className="relative w-full aspect-square rounded-xl overflow-hidden">
+                <img
+                  src={generatedImage}
+                  alt="Recipe"
+                  className="w-full h-full object-cover"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="absolute bottom-3 right-3 gap-2"
+                  onClick={generateAIImage}
+                  disabled={isGeneratingImage}
+                >
+                  {isGeneratingImage ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  Regenerate
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={generateAIImage}
+                disabled={isGeneratingImage}
+                className="w-full aspect-video rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center gap-3 text-muted-foreground hover:text-primary"
+              >
+                {isGeneratingImage ? (
+                  <>
+                    <Loader2 className="w-10 h-10 animate-spin" />
+                    <span className="text-sm font-medium">Generating image...</span>
+                    <span className="text-xs">This may take a few seconds</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Sparkles className="w-8 h-8" />
+                    </div>
+                    <span className="text-sm font-medium">Generate AI Image</span>
+                    <span className="text-xs">Create a beautiful photo of your recipe</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Basic Info */}
       <Card>
         <CardContent className="p-4 space-y-4">
