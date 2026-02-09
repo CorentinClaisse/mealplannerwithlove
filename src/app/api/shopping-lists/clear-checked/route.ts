@@ -1,0 +1,74 @@
+import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+
+// POST - Clear all checked items from active shopping list
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createClient() as any
+
+    // Get current user
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Get user's household
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("household_id")
+      .eq("id", user.id)
+      .single()
+
+    if (!profile?.household_id) {
+      return NextResponse.json(
+        { error: "No household found" },
+        { status: 404 }
+      )
+    }
+
+    // Get active shopping list
+    const { data: shoppingList } = await supabase
+      .from("shopping_lists")
+      .select("id")
+      .eq("household_id", profile.household_id)
+      .eq("status", "active")
+      .single()
+
+    if (!shoppingList) {
+      return NextResponse.json(
+        { error: "No active shopping list" },
+        { status: 404 }
+      )
+    }
+
+    // Delete all checked items
+    const { error: deleteError, count } = await supabase
+      .from("shopping_list_items")
+      .delete()
+      .eq("shopping_list_id", shoppingList.id)
+      .eq("is_checked", true)
+
+    if (deleteError) {
+      console.error("Error deleting checked items:", deleteError)
+      return NextResponse.json(
+        { error: "Failed to clear checked items" },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      itemsRemoved: count || 0
+    })
+  } catch (error) {
+    console.error("Error clearing checked items:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}

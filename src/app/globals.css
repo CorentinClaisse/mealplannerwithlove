@@ -1,0 +1,120 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Warm & friendly color palette - from Lovable */
+  --background: 30 100% 97%;
+  --foreground: 20 30% 15%;
+
+  --card: 30 60% 98%;
+  --card-foreground: 20 30% 15%;
+
+  --popover: 30 100% 97%;
+  --popover-foreground: 20 30% 15%;
+
+  --primary: 14 70% 62%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 155 30% 62%;
+  --secondary-foreground: 0 0% 100%;
+
+  --muted: 30 30% 93%;
+  --muted-foreground: 20 10% 45%;
+
+  --accent: 40 90% 64%;
+  --accent-foreground: 20 30% 15%;
+
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 30 25% 88%;
+  --input: 30 25% 88%;
+  --ring: 14 70% 62%;
+
+  --radius: 1rem;
+
+  --success: 155 40% 50%;
+  --warning: 40 90% 55%;
+  --danger: 0 72% 55%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  --font-sans: 'Nunito', system-ui, -apple-system, sans-serif;
+  --font-serif: 'DM Serif Display', serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: 'DM Serif Display', serif;
+}
+
+/* Mobile-first: ensure touch targets are large enough */
+button, a, input, select, textarea {
+  min-height: 44px;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area for mobile devices */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
