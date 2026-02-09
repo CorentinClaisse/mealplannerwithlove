@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Check, ChefHat, Clock, MoreVertical, Trash2, X } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { createPortal } from "react-dom"
+import { Check, ChefHat, Clock, MoreVertical, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useDeleteMealEntry, useToggleMealComplete } from "@/hooks/use-meal-plan"
@@ -14,8 +15,15 @@ interface MealCardProps {
 
 export function MealCard({ entry }: MealCardProps) {
   const [showActions, setShowActions] = useState(false)
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
+  const [isMounted, setIsMounted] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const deleteMealEntry = useDeleteMealEntry()
   const toggleComplete = useToggleMealComplete()
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const title = entry.recipe?.title || entry.custom_meal_name || "Meal"
   const isCompleted = entry.is_completed
@@ -36,10 +44,21 @@ export function MealCard({ entry }: MealCardProps) {
     setShowActions(false)
   }
 
+  const handleMenuClick = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setMenuPosition({
+        top: rect.bottom + 4,
+        left: Math.max(8, rect.right - 120), // menu width, with min left margin
+      })
+    }
+    setShowActions(!showActions)
+  }
+
   return (
     <Card
       className={cn(
-        "relative overflow-hidden transition-all",
+        "relative transition-all",
         isCompleted && "opacity-60"
       )}
     >
@@ -100,37 +119,41 @@ export function MealCard({ entry }: MealCardProps) {
             )}
           </div>
 
-          {/* Actions Menu */}
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-6 h-6"
-              onClick={() => setShowActions(!showActions)}
-            >
-              <MoreVertical className="w-3 h-3" />
-            </Button>
-
-            {showActions && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setShowActions(false)}
-                />
-                <div className="absolute right-0 top-full mt-1 z-50 bg-background border rounded-lg shadow-lg p-1 min-w-[120px]">
-                  <button
-                    onClick={handleDelete}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted rounded-md"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Remove
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          {/* Actions Menu Button */}
+          <Button
+            ref={buttonRef}
+            variant="ghost"
+            size="icon"
+            className="w-6 h-6 flex-shrink-0"
+            onClick={handleMenuClick}
+          >
+            <MoreVertical className="w-3 h-3" />
+          </Button>
         </div>
       </CardContent>
+
+      {/* Portal Menu - renders at document body level to avoid overflow clipping */}
+      {showActions && isMounted && createPortal(
+        <>
+          <div
+            className="fixed inset-0 z-[100]"
+            onClick={() => setShowActions(false)}
+          />
+          <div
+            className="fixed z-[101] bg-background border rounded-lg shadow-lg p-1 min-w-[120px]"
+            style={{ top: menuPosition.top, left: menuPosition.left }}
+          >
+            <button
+              onClick={handleDelete}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted rounded-md"
+            >
+              <Trash2 className="w-4 h-4" />
+              Remove
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
     </Card>
   )
 }
