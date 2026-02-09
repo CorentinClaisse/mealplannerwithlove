@@ -273,9 +273,9 @@ export function RecipeForm({ recipe, mode = "create" }: RecipeFormProps) {
                   {isGeneratingImage ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Sparkles className="w-4 h-4" />
+                    <ImageIcon className="w-4 h-4" />
                   )}
-                  Regenerate
+                  Change
                 </Button>
               </div>
             ) : (
@@ -288,16 +288,16 @@ export function RecipeForm({ recipe, mode = "create" }: RecipeFormProps) {
                 {isGeneratingImage ? (
                   <>
                     <Loader2 className="w-10 h-10 animate-spin" />
-                    <span className="text-sm font-medium">Generating image...</span>
+                    <span className="text-sm font-medium">Finding image...</span>
                     <span className="text-xs">This may take a few seconds</span>
                   </>
                 ) : (
                   <>
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Sparkles className="w-8 h-8" />
+                      <ImageIcon className="w-8 h-8" />
                     </div>
-                    <span className="text-sm font-medium">Generate AI Image</span>
-                    <span className="text-xs">Create a beautiful photo of your recipe</span>
+                    <span className="text-sm font-medium">Find Recipe Image</span>
+                    <span className="text-xs">Search for a matching food photo</span>
                   </>
                 )}
               </button>
