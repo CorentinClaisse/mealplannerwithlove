@@ -1,11 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { createPortal } from "react-dom"
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
-import { useRecipes, useToggleFavorite } from "@/hooks/use-recipes"
+import { useRecipes, useToggleFavorite, useDeleteRecipe } from "@/hooks/use-recipes"
+import { useAddShoppingItem } from "@/hooks/use-shopping-list"
 import type { Recipe } from "@/types/recipe"
-import { Plus, Search, Clock, Heart, Import, Loader2 } from "lucide-react"
+import { Plus, Search, Clock, Heart, Import, Loader2, MoreVertical, Edit, Trash2, ShoppingCart } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils/cn"
 import { useDebouncedCallback } from "@/hooks/use-debounce"
@@ -161,7 +164,19 @@ export default function RecipesPage() {
 }
 
 function RecipeCard({ recipe }: { recipe: Recipe }) {
+  const router = useRouter()
   const toggleFavorite = useToggleFavorite()
+  const deleteRecipe = useDeleteRecipe()
+  const addShoppingItem = useAddShoppingItem()
+  const [showMenu, setShowMenu] = useState(false)
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
+  const [isMounted, setIsMounted] = useState(false)
+  const [isAddingToCart, setIsAddingToCart] = useState(false)
+
+  // Set mounted for portal
+  useState(() => {
+    setIsMounted(true)
+  })
 
   const totalTime =
     (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)
@@ -170,6 +185,66 @@ function RecipeCard({ recipe }: { recipe: Recipe }) {
     e.preventDefault()
     e.stopPropagation()
     toggleFavorite.mutate({ id: recipe.id, isFavorite: !recipe.is_favorite })
+  }
+
+  const handleMenuClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    setMenuPosition({
+      top: rect.bottom + 4,
+      left: Math.max(8, rect.left - 100),
+    })
+    setShowMenu(!showMenu)
+  }
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowMenu(false)
+    router.push(`/recipes/${recipe.id}/edit`)
+  }
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowMenu(false)
+    if (confirm("Are you sure you want to delete this recipe?")) {
+      await deleteRecipe.mutateAsync(recipe.id)
+    }
+  }
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowMenu(false)
+    setIsAddingToCart(true)
+
+    try {
+      // Get the full recipe with ingredients
+      const response = await fetch(`/api/recipes/${recipe.id}`)
+      const data = await response.json()
+      const ingredients = data.recipe?.recipe_ingredients || []
+
+      // Add each ingredient to shopping list
+      for (const ing of ingredients) {
+        const name = ing.ingredient?.name || ing.original_text
+        if (name) {
+          await addShoppingItem.mutateAsync({
+            name,
+            quantity: ing.quantity || null,
+            unit: ing.unit || null,
+            category: ing.ingredient?.category || "Other",
+          })
+        }
+      }
+      alert(`Added ${ingredients.length} items to shopping list!`)
+    } catch (error) {
+      console.error("Failed to add ingredients:", error)
+      alert("Failed to add ingredients to shopping list")
+    } finally {
+      setIsAddingToCart(false)
+    }
   }
 
   // Get emoji based on first tag or default
@@ -185,46 +260,104 @@ function RecipeCard({ recipe }: { recipe: Recipe }) {
   }
 
   return (
-    <Link href={`/recipes/${recipe.id}`}>
-      <div className="bg-card rounded-2xl overflow-hidden border border-border text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 animate-fade-in">
-        {/* Image */}
-        <div className="aspect-[4/3] bg-primary/10 flex items-center justify-center relative">
-          {recipe.image_url ? (
-            <img
-              src={recipe.image_url}
-              alt={recipe.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <span className="text-4xl">{getMealEmoji()}</span>
-          )}
+    <>
+      <Link href={`/recipes/${recipe.id}`}>
+        <div className="bg-card rounded-2xl overflow-hidden border border-border text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 animate-fade-in">
+          {/* Image */}
+          <div className="aspect-[4/3] bg-primary/10 flex items-center justify-center relative">
+            {recipe.image_url ? (
+              <img
+                src={recipe.image_url}
+                alt={recipe.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-4xl">{getMealEmoji()}</span>
+            )}
 
-          {/* Favorite button */}
-          <button
-            onClick={handleFavoriteClick}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center"
-          >
-            <Heart
-              className={cn(
-                "w-4 h-4 transition-colors",
-                recipe.is_favorite
-                  ? "fill-primary text-primary"
-                  : "text-muted-foreground"
-              )}
-            />
-          </button>
-        </div>
+            {/* Favorite button */}
+            <button
+              onClick={handleFavoriteClick}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center"
+            >
+              <Heart
+                className={cn(
+                  "w-4 h-4 transition-colors",
+                  recipe.is_favorite
+                    ? "fill-primary text-primary"
+                    : "text-muted-foreground"
+                )}
+              />
+            </button>
 
-        <div className="p-3">
-          <p className="font-bold text-sm text-foreground truncate">
-            {recipe.title}
-          </p>
-          <div className="flex items-center gap-1 mt-1 text-muted-foreground">
-            <Clock className="w-3 h-3" />
-            <span className="text-xs">{totalTime || "?"} min</span>
+            {/* Menu button */}
+            <button
+              onClick={handleMenuClick}
+              className="absolute top-2 left-2 w-7 h-7 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center"
+            >
+              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+            </button>
+
+            {/* Loading overlay */}
+            {isAddingToCart && (
+              <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            )}
+          </div>
+
+          <div className="p-3">
+            <p className="font-bold text-sm text-foreground truncate">
+              {recipe.title}
+            </p>
+            <div className="flex items-center gap-1 mt-1 text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              <span className="text-xs">{totalTime || "?"} min</span>
+            </div>
           </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+
+      {/* Portal Menu */}
+      {showMenu && typeof document !== "undefined" && createPortal(
+        <>
+          <div
+            className="fixed inset-0 z-[100]"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setShowMenu(false)
+            }}
+          />
+          <div
+            className="fixed z-[101] bg-card border border-border rounded-xl shadow-lg p-1 min-w-[160px]"
+            style={{ top: menuPosition.top, left: menuPosition.left }}
+          >
+            <button
+              onClick={handleEdit}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted rounded-lg transition-colors"
+            >
+              <Edit className="w-4 h-4" />
+              Edit recipe
+            </button>
+            <button
+              onClick={handleAddToCart}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted rounded-lg transition-colors"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Add to shopping list
+            </button>
+            <button
+              onClick={handleDelete}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-destructive hover:bg-muted rounded-lg transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete recipe
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+    </>
   )
 }
