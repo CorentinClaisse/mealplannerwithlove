@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useRecipe, useToggleFavorite, useDeleteRecipe } from "@/hooks/use-recipes"
+import { useRecipe, useToggleFavorite, useDeleteRecipe, useUpdateRecipeTags } from "@/hooks/use-recipes"
 import { AddToPlanModal } from "@/components/planner/add-to-plan-modal"
 import {
   ChevronLeft,
@@ -18,6 +18,8 @@ import {
   Check,
   Loader2,
   CalendarPlus,
+  X,
+  Plus,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils/cn"
@@ -32,9 +34,12 @@ export default function RecipeDetailPage({
   const { data, isLoading, error } = useRecipe(id)
   const toggleFavorite = useToggleFavorite()
   const deleteRecipe = useDeleteRecipe()
+  const updateTags = useUpdateRecipeTags()
 
   const recipe = data?.recipe
   const [showAddToPlan, setShowAddToPlan] = useState(false)
+  const [tagInput, setTagInput] = useState("")
+  const [showTagInput, setShowTagInput] = useState(false)
 
   const handleDelete = async () => {
     if (confirm("Are you sure you want to delete this recipe?")) {
@@ -48,6 +53,33 @@ export default function RecipeDetailPage({
       toggleFavorite.mutate({ id: recipe.id, isFavorite: !recipe.is_favorite })
     }
   }
+
+  const handleToggleMealType = (type: string) => {
+    if (!recipe) return
+    const current = recipe.meal_type || []
+    const updated = current.includes(type)
+      ? current.filter((t) => t !== type)
+      : [...current, type]
+    updateTags.mutate({ id: recipe.id, mealType: updated })
+  }
+
+  const handleRemoveTag = (tag: string) => {
+    if (!recipe) return
+    const updated = (recipe.tags || []).filter((t) => t !== tag)
+    updateTags.mutate({ id: recipe.id, tags: updated })
+  }
+
+  const handleAddTag = () => {
+    if (!recipe) return
+    const tag = tagInput.trim().toLowerCase()
+    if (tag && !(recipe.tags || []).includes(tag)) {
+      updateTags.mutate({ id: recipe.id, tags: [...(recipe.tags || []), tag] })
+      setTagInput("")
+      setShowTagInput(false)
+    }
+  }
+
+  const allMealTypes = ["breakfast", "lunch", "dinner", "snack"]
 
   if (isLoading) {
     return (
@@ -145,21 +177,80 @@ export default function RecipeDetailPage({
               </span>
             </div>
 
-            {/* Tags */}
-            {recipe.tags && recipe.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {recipe.meal_type?.map((type) => (
-                  <Badge key={type} variant="default" className="capitalize">
+            {/* Meal Type — toggleable */}
+            <div className="flex flex-wrap gap-2 mb-2">
+              {allMealTypes.map((type) => {
+                const active = recipe.meal_type?.includes(type)
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleToggleMealType(type)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    )}
+                  >
                     {type}
-                  </Badge>
-                ))}
-                {recipe.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Tags — tap to remove, + to add */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(recipe.tags || []).map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="gap-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+                  onClick={() => handleRemoveTag(tag)}
+                >
+                  {tag}
+                  <X className="w-3 h-3" />
+                </Badge>
+              ))}
+              {showTagInput ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleAddTag()
+                      }
+                      if (e.key === "Escape") {
+                        setShowTagInput(false)
+                        setTagInput("")
+                      }
+                    }}
+                    onBlur={() => {
+                      if (tagInput.trim()) {
+                        handleAddTag()
+                      } else {
+                        setShowTagInput(false)
+                      }
+                    }}
+                    placeholder="New tag..."
+                    className="h-6 px-2 text-xs rounded-full border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 w-24"
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowTagInput(true)}
+                  className="h-6 px-2 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center gap-1 text-xs"
+                >
+                  <Plus className="w-3 h-3" />
+                  Tag
+                </button>
+              )}
+            </div>
 
             {/* Actions */}
             <div className="flex items-center gap-2 pt-3 border-t">

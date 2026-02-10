@@ -204,7 +204,7 @@ export async function DELETE(
   }
 }
 
-// PATCH /api/recipes/[id] - Toggle favorite
+// PATCH /api/recipes/[id] - Partial updates (favorite, cooked, tags, meal_type)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -219,6 +219,30 @@ export async function PATCH(
       const { error } = await supabase
         .from("recipes")
         .update({ is_favorite: body.is_favorite })
+        .eq("id", id)
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+    }
+
+    // Handle meal_type update
+    if (body.meal_type !== undefined) {
+      const { error } = await supabase
+        .from("recipes")
+        .update({ meal_type: body.meal_type })
+        .eq("id", id)
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+    }
+
+    // Handle tags update
+    if (body.tags !== undefined) {
+      const { error } = await supabase
+        .from("recipes")
+        .update({ tags: body.tags })
         .eq("id", id)
 
       if (error) {

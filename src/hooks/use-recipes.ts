@@ -142,6 +142,42 @@ export function useDeleteRecipe() {
   })
 }
 
+export function useUpdateRecipeTags() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      mealType,
+      tags,
+    }: {
+      id: string
+      mealType?: string[]
+      tags?: string[]
+    }) => {
+      const body: Record<string, unknown> = {}
+      if (mealType !== undefined) body.meal_type = mealType
+      if (tags !== undefined) body.tags = tags
+
+      const response = await fetch(`/api/recipes/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update tags")
+      }
+
+      return response.json() as Promise<{ recipe: Recipe }>
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["recipe", data.recipe.id], data)
+      queryClient.invalidateQueries({ queryKey: ["recipes"] })
+    },
+  })
+}
+
 export function useToggleFavorite() {
   const queryClient = useQueryClient()
 
