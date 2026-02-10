@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useRecipe, useToggleFavorite, useDeleteRecipe, useUpdateRecipeTags } from "@/hooks/use-recipes"
+import { useAddShoppingItem } from "@/hooks/use-shopping-list"
 import { AddToPlanModal } from "@/components/planner/add-to-plan-modal"
 import {
   ChevronLeft,
@@ -20,6 +21,7 @@ import {
   CalendarPlus,
   X,
   Plus,
+  ShoppingCart,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils/cn"
@@ -35,11 +37,13 @@ export default function RecipeDetailPage({
   const toggleFavorite = useToggleFavorite()
   const deleteRecipe = useDeleteRecipe()
   const updateTags = useUpdateRecipeTags()
+  const addShoppingItem = useAddShoppingItem()
 
   const recipe = data?.recipe
   const [showAddToPlan, setShowAddToPlan] = useState(false)
   const [tagInput, setTagInput] = useState("")
   const [showTagInput, setShowTagInput] = useState(false)
+  const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set())
 
   const handleDelete = async () => {
     if (confirm("Are you sure you want to delete this recipe?")) {
@@ -76,6 +80,21 @@ export default function RecipeDetailPage({
       updateTags.mutate({ id: recipe.id, tags: [...(recipe.tags || []), tag] })
       setTagInput("")
       setShowTagInput(false)
+    }
+  }
+
+  const handleAddToShoppingList = async (item: typeof ingredients[0]) => {
+    const name = item.ingredient?.name || "Unknown ingredient"
+    try {
+      await addShoppingItem.mutateAsync({
+        name,
+        quantity: item.quantity || null,
+        unit: item.unit || undefined,
+        category: item.ingredient?.category || undefined,
+      })
+      setAddedToCart((prev) => new Set(prev).add(item.id))
+    } catch (error) {
+      console.error("Failed to add to shopping list:", error)
     }
   }
 
@@ -291,30 +310,49 @@ export default function RecipeDetailPage({
               Ingredients ({ingredients.length})
             </h2>
             <ul className="space-y-2">
-              {ingredients.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-start gap-2 text-sm"
-                >
-                  <Check className="w-4 h-4 text-secondary mt-0.5 flex-shrink-0" />
-                  <span>
-                    {item.quantity && (
-                      <span className="font-medium">
-                        {item.quantity} {item.unit}{" "}
-                      </span>
-                    )}
-                    {item.ingredient?.name || "Unknown ingredient"}
-                    {item.preparation && (
-                      <span className="text-muted-foreground">
-                        , {item.preparation}
-                      </span>
-                    )}
-                    {item.is_optional && (
-                      <span className="text-muted-foreground"> (optional)</span>
-                    )}
-                  </span>
-                </li>
-              ))}
+              {ingredients.map((item) => {
+                const isAdded = addedToCart.has(item.id)
+                return (
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Check className="w-4 h-4 text-secondary flex-shrink-0" />
+                    <span className="flex-1">
+                      {item.quantity && (
+                        <span className="font-medium">
+                          {item.quantity} {item.unit}{" "}
+                        </span>
+                      )}
+                      {item.ingredient?.name || "Unknown ingredient"}
+                      {item.preparation && (
+                        <span className="text-muted-foreground">
+                          , {item.preparation}
+                        </span>
+                      )}
+                      {item.is_optional && (
+                        <span className="text-muted-foreground"> (optional)</span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => handleAddToShoppingList(item)}
+                      disabled={isAdded}
+                      className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all",
+                        isAdded
+                          ? "bg-secondary/20 text-secondary"
+                          : "bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground"
+                      )}
+                    >
+                      {isAdded ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           </CardContent>
         </Card>
