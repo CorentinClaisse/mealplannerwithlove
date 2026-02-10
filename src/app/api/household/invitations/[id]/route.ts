@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getAuthenticatedUser,
+  getAuthenticatedHousehold,
+  handleAuthError,
+} from "@/lib/supabase/auth-helpers"
 
 // POST - Accept or decline invitation
 export async function POST(
@@ -8,7 +12,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const supabase = (await createClient()) as any
+    const { supabase, user } = await getAuthenticatedUser()
     const body = await request.json()
 
     const { action } = body // "accept" or "decline"
@@ -18,15 +22,6 @@ export async function POST(
         { error: "Invalid action. Use 'accept' or 'decline'" },
         { status: 400 }
       )
-    }
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Get the invitation
@@ -123,11 +118,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, action: "accepted" })
   } catch (error) {
-    console.error("Error processing invitation:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }
 
@@ -138,25 +129,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const supabase = (await createClient()) as any
+    const { supabase, householdId, role } = await getAuthenticatedHousehold()
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id, role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id || profile.role !== "owner") {
+    if (role !== "owner") {
       return NextResponse.json(
         { error: "Only household owners can cancel invitations" },
         { status: 403 }
@@ -168,7 +143,7 @@ export async function DELETE(
       .from("household_invitations")
       .delete()
       .eq("id", id)
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
 
     if (error) {
       console.error("Error deleting invitation:", error)
@@ -180,10 +155,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error canceling invitation:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

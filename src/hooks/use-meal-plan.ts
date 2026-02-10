@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import type { WeekPlanData, MealEntry, MealEntryInput } from "@/types/meal-plan"
+import { useRealtimeSubscription } from "./use-realtime"
 
 // Fetch meal plan for a week
 async function fetchMealPlan(weekStart: string): Promise<WeekPlanData> {
@@ -66,6 +67,12 @@ async function updateMealEntry({
 // Hook to get meal plan for a specific week
 export function useMealPlan(weekStart: Date) {
   const weekStartStr = format(weekStart, "yyyy-MM-dd")
+
+  // Subscribe to realtime changes so other household members see updates
+  useRealtimeSubscription({
+    table: "meal_entries",
+    queryKey: ["mealPlan", weekStartStr],
+  })
 
   return useQuery({
     queryKey: ["mealPlan", weekStartStr],

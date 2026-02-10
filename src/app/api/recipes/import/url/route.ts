@@ -1,27 +1,21 @@
-import { createClient } from "@/lib/supabase/server"
 import { extractRecipeFromText } from "@/lib/ai/claude"
 import { URL_EXTRACT_PROMPT } from "@/lib/ai/prompts"
 import { NextRequest, NextResponse } from "next/server"
 import * as cheerio from "cheerio"
+import {
+  getAuthenticatedHousehold,
+  handleAuthError,
+} from "@/lib/supabase/auth-helpers"
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient() as any
-  const { url } = await request.json()
-
-  // Check auth
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  if (!url) {
-    return NextResponse.json({ error: "URL is required" }, { status: 400 })
-  }
-
   try {
+    const { supabase, user, householdId } = await getAuthenticatedHousehold()
+    const { url } = await request.json()
+
+    if (!url) {
+      return NextResponse.json({ error: "URL is required" }, { status: 400 })
+    }
+
     // Fetch the webpage
     const response = await fetch(url, {
       headers: {
@@ -116,33 +110,18 @@ export async function POST(request: NextRequest) {
     parsedRecipe.sourceType = "url_import"
 
     // Log the import
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (profile?.household_id) {
-      await supabase.from("recipe_imports").insert({
-        household_id: profile.household_id,
-        imported_by: user.id,
-        import_type: "url",
-        source_url: url,
-        raw_ai_response: parsedRecipe,
-        status: "completed",
-        confidence_score: parsedRecipe.confidence || 0.9,
-      })
-    }
+    await supabase.from("recipe_imports").insert({
+      household_id: householdId,
+      imported_by: user.id,
+      import_type: "url",
+      source_url: url,
+      raw_ai_response: parsedRecipe,
+      status: "completed",
+      confidence_score: parsedRecipe.confidence || 0.9,
+    })
 
     return NextResponse.json({ recipe: parsedRecipe })
   } catch (error) {
-    console.error("URL import error:", error)
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to import recipe",
-      },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

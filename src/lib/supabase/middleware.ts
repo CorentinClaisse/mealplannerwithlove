@@ -47,13 +47,12 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith(route)
   );
 
-  // For now, allow access without auth (we'll enable protection later)
-  // Uncomment to require auth:
-  // if (isProtectedRoute && !user) {
-  //   const url = request.nextUrl.clone();
-  //   url.pathname = "/login";
-  //   return NextResponse.redirect(url);
-  // }
+  // Redirect unauthenticated users away from protected routes
+  if (isProtectedRoute && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
 
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone();

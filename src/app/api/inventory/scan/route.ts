@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedHousehold, handleAuthError } from "@/lib/supabase/auth-helpers"
 import { callClaudeVision } from "@/lib/ai/claude"
 import { FRIDGE_SCAN_PROMPT } from "@/lib/ai/prompts"
 import type { FridgeScanResult, InventoryLocation } from "@/types/inventory"
+import type { Json } from "@/types/database"
 
 // POST - Scan fridge/freezer/pantry image and identify items
 export async function POST(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as any
+    const { supabase, user, householdId } = await getAuthenticatedHousehold()
     const body = await request.json()
 
     const { image, location = "fridge", addToInventory = false } = body
@@ -16,30 +17,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Image is required" },
         { status: 400 }
-      )
-    }
-
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
       )
     }
 
@@ -93,7 +70,7 @@ export async function POST(request: NextRequest) {
         const { data: existing } = await supabase
           .from("inventory_items")
           .select("id, quantity")
-          .eq("household_id", profile.household_id)
+          .eq("household_id", householdId)
           .eq("location", location)
           .ilike("name", item.name)
           .single()
@@ -113,7 +90,7 @@ export async function POST(request: NextRequest) {
           const { data: newItem } = await supabase
             .from("inventory_items")
             .insert({
-              household_id: profile.household_id,
+              household_id: householdId,
               name: item.name,
               quantity: item.quantity || null,
               unit: item.unit || null,
@@ -132,13 +109,13 @@ export async function POST(request: NextRequest) {
 
       // Log the scan
       await supabase.from("fridge_scans").insert({
-        household_id: profile.household_id,
+        household_id: householdId,
         scanned_by: user.id,
         image_url: "", // We're not storing images for now
-        scan_type: location,
-        raw_ai_response: scanResult,
+        scan_type: location as "fridge" | "freezer" | "pantry" | "receipt",
+        raw_ai_response: scanResult as unknown as Json,
         items_detected: scanResult.items.length,
-        status: "completed",
+        status: "completed" as const,
         processed_at: new Date().toISOString(),
       })
     }
@@ -149,10 +126,6 @@ export async function POST(request: NextRequest) {
       itemsDetected: scanResult.items?.length || 0,
     })
   } catch (error) {
-    console.error("Error scanning fridge:", error)
-    return NextResponse.json(
-      { error: "Failed to scan image" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

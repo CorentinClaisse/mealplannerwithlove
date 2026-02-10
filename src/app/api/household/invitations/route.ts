@@ -1,36 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getAuthenticatedHousehold,
+  handleAuthError,
+} from "@/lib/supabase/auth-helpers"
 
 // GET - Get pending invitations for household
 export async function GET() {
   try {
-    const supabase = (await createClient()) as any
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json({ invitations: [] })
-    }
+    const { supabase, householdId } = await getAuthenticatedHousehold()
 
     // Get pending invitations
     const { data: invitations, error } = await supabase
       .from("household_invitations")
       .select("*")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
 
@@ -44,18 +27,15 @@ export async function GET() {
 
     return NextResponse.json({ invitations })
   } catch (error) {
-    console.error("Error fetching invitations:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }
 
 // POST - Send invitation to join household
 export async function POST(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as any
+    const { supabase, user, householdId, role } =
+      await getAuthenticatedHousehold()
     const body = await request.json()
 
     const { email } = body
@@ -67,31 +47,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id, role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
-      )
-    }
-
     // Check if user is owner
-    if (profile.role !== "owner") {
+    if (role !== "owner") {
       return NextResponse.json(
         { error: "Only household owners can send invitations" },
         { status: 403 }
@@ -102,7 +59,7 @@ export async function POST(request: NextRequest) {
     const { data: existingInvite } = await supabase
       .from("household_invitations")
       .select("id")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .eq("email", email.toLowerCase())
       .eq("status", "pending")
       .single()
@@ -114,12 +71,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if email is already a member
-    const { data: existingMember } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("household_id", profile.household_id)
-      .single()
+    // Check if email is already a member of this household
+    const { data: isMember } = await supabase
+      .rpc("is_email_household_member", {
+        p_household_id: householdId,
+        p_email: email,
+      })
+
+    if (isMember) {
+      return NextResponse.json(
+        { error: "This email is already a member of your household" },
+        { status: 400 }
+      )
+    }
 
     // Create invitation (expires in 7 days)
     const expiresAt = new Date()
@@ -128,7 +92,7 @@ export async function POST(request: NextRequest) {
     const { data: invitation, error: createError } = await supabase
       .from("household_invitations")
       .insert({
-        household_id: profile.household_id,
+        household_id: householdId,
         email: email.toLowerCase(),
         invited_by: user.id,
         status: "pending",
@@ -145,15 +109,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Send email notification (would use Supabase Edge Functions or Resend)
-    // For now, just return the invitation
+    // TODO: Invoke the send-invitation-email edge function once deployed:
+    // await supabase.functions.invoke("send-invitation-email", {
+    //   body: { email: email.toLowerCase(), householdId, invitedBy: user.email },
+    // })
 
     return NextResponse.json({ invitation }, { status: 201 })
   } catch (error) {
-    console.error("Error creating invitation:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

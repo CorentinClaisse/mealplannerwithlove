@@ -1,40 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getAuthenticatedHousehold,
+  handleAuthError,
+} from "@/lib/supabase/auth-helpers"
 
 // POST - Leave current household
 export async function POST() {
   try {
-    const supabase = (await createClient()) as any
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id, role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "You are not in a household" },
-        { status: 400 }
-      )
-    }
+    const { supabase, user, householdId, role } =
+      await getAuthenticatedHousehold()
 
     // If user is owner, check if there are other members
-    if (profile.role === "owner") {
+    if (role === "owner") {
       const { data: members } = await supabase
         .from("profiles")
         .select("id")
-        .eq("household_id", profile.household_id)
+        .eq("household_id", householdId)
 
       if (members && members.length > 1) {
         return NextResponse.json(
@@ -51,7 +32,7 @@ export async function POST() {
       await supabase
         .from("households")
         .delete()
-        .eq("id", profile.household_id)
+        .eq("id", householdId)
     }
 
     // Create new household for the user
@@ -89,10 +70,6 @@ export async function POST() {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error leaving household:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

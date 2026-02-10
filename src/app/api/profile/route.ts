@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getAuthenticatedUser,
+  handleAuthError,
+} from "@/lib/supabase/auth-helpers"
 
 // GET - Fetch current user's profile with household info
 export async function GET() {
   try {
-    const supabase = (await createClient()) as any
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const { supabase, user } = await getAuthenticatedUser()
 
     // Get profile with household
     const { data: profile, error: profileError } = await supabase
@@ -52,28 +46,15 @@ export async function GET() {
       email: user.email,
     })
   } catch (error) {
-    console.error("Error fetching profile:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }
 
 // PATCH - Update current user's profile
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as any
+    const { supabase, user } = await getAuthenticatedUser()
     const body = await request.json()
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
 
     const updateData: Record<string, any> = {
       updated_at: new Date().toISOString(),
@@ -104,10 +85,6 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ profile })
   } catch (error) {
-    console.error("Error updating profile:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

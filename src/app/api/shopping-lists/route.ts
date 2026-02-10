@@ -1,34 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedHousehold, handleAuthError } from "@/lib/supabase/auth-helpers"
 
 // GET - Fetch active shopping list (or create one if none exists)
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient() as any
-
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
-      )
-    }
+    const { supabase, householdId } = await getAuthenticatedHousehold()
 
     // Try to get active shopping list
     let { data: shoppingList, error: listError } = await supabase
@@ -39,7 +15,7 @@ export async function GET(request: NextRequest) {
         items:shopping_list_items(*)
       `
       )
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -50,7 +26,7 @@ export async function GET(request: NextRequest) {
       const { data: newList, error: createError } = await supabase
         .from("shopping_lists")
         .insert({
-          household_id: profile.household_id,
+          household_id: householdId,
           name: "Shopping List",
           status: "active",
         })
@@ -88,18 +64,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ shoppingList })
   } catch (error) {
-    console.error("Error fetching shopping list:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }
 
 // POST - Add item to active shopping list
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient() as any
+    const { supabase, householdId } = await getAuthenticatedHousehold()
     const body = await request.json()
 
     const { name, quantity, unit, category, notes } = body
@@ -108,35 +80,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
 
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
-      )
-    }
-
     // Get or create active shopping list
     let { data: shoppingList } = await supabase
       .from("shopping_lists")
       .select("id")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .eq("status", "active")
       .single()
 
@@ -144,7 +92,7 @@ export async function POST(request: NextRequest) {
       const { data: newList, error: createError } = await supabase
         .from("shopping_lists")
         .insert({
-          household_id: profile.household_id,
+          household_id: householdId,
           name: "Shopping List",
           status: "active",
         })
@@ -215,10 +163,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ item }, { status: 201 })
   } catch (error) {
-    console.error("Error adding shopping item:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

@@ -8,6 +8,7 @@ import {
   Trash2,
   MoreVertical,
   X,
+  Package,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
@@ -27,6 +28,7 @@ import { cn } from "@/lib/utils/cn"
 export default function ShoppingPage() {
   const [newItemName, setNewItemName] = useState("")
   const [showMenu, setShowMenu] = useState(false)
+  const [deductInventory, setDeductInventory] = useState(false)
 
   const { data, isLoading, error } = useShoppingList()
   const addItem = useAddShoppingItem()
@@ -77,7 +79,7 @@ export default function ShoppingPage() {
 
   const handleGenerateFromPlan = async () => {
     try {
-      await generateFromPlan.mutateAsync(undefined)
+      await generateFromPlan.mutateAsync({ deductInventory })
       setShowMenu(false)
     } catch (error) {
       console.error("Failed to generate:", error)
@@ -136,6 +138,26 @@ export default function ShoppingPage() {
                   onClick={() => setShowMenu(false)}
                 />
                 <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-lg p-1 min-w-[200px]">
+                  <button
+                    onClick={() => setDeductInventory(!deductInventory)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted rounded-lg transition-colors"
+                  >
+                    <Package className="w-4 h-4" />
+                    <span className="flex-1 text-left">Deduct inventory</span>
+                    <span
+                      className={cn(
+                        "w-8 h-5 rounded-full relative transition-colors",
+                        deductInventory ? "bg-secondary" : "bg-muted"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
+                          deductInventory ? "translate-x-3.5" : "translate-x-0.5"
+                        )}
+                      />
+                    </span>
+                  </button>
                   <button
                     onClick={handleGenerateFromPlan}
                     disabled={generateFromPlan.isPending}
@@ -213,7 +235,7 @@ export default function ShoppingPage() {
               variant="outline"
               size="sm"
               className="mt-4"
-              onClick={() => generateFromPlan.mutate(undefined)}
+              onClick={() => generateFromPlan.mutate({ deductInventory })}
               disabled={generateFromPlan.isPending}
             >
               <ShoppingCart className="w-4 h-4 mr-2" />

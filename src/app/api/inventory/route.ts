@@ -1,46 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getAuthenticatedHousehold,
+  handleAuthError,
+} from "@/lib/supabase/auth-helpers"
 
 // GET - Fetch inventory items, optionally filtered by location
 export async function GET(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as any
+    const { supabase, householdId } = await getAuthenticatedHousehold()
     const { searchParams } = new URL(request.url)
     const location = searchParams.get("location")
-
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
-      )
-    }
 
     // Build query
     let query = supabase
       .from("inventory_items")
       .select("*")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .order("name", { ascending: true })
 
     if (location) {
-      query = query.eq("location", location)
+      query = query.eq("location", location as "fridge" | "freezer" | "pantry")
     }
 
     const { data: items, error } = await query
@@ -62,18 +41,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items, grouped })
   } catch (error) {
-    console.error("Error fetching inventory:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }
 
 // POST - Add item to inventory
 export async function POST(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as any
+    const { supabase, householdId } = await getAuthenticatedHousehold()
     const body = await request.json()
 
     const { name, quantity, unit, location, expiry_date } = body
@@ -89,35 +64,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
-      )
-    }
-
     // Check if item with same name exists in same location
     const { data: existing } = await supabase
       .from("inventory_items")
       .select("id, quantity")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .eq("location", location)
       .ilike("name", name)
       .single()
@@ -149,7 +100,7 @@ export async function POST(request: NextRequest) {
     const { data: item, error: createError } = await supabase
       .from("inventory_items")
       .insert({
-        household_id: profile.household_id,
+        household_id: householdId,
         name,
         quantity: quantity || null,
         unit: unit || null,
@@ -170,10 +121,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ item }, { status: 201 })
   } catch (error) {
-    console.error("Error adding inventory item:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

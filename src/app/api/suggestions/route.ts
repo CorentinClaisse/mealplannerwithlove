@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedHousehold, handleAuthError } from "@/lib/supabase/auth-helpers"
 import { anthropic } from "@/lib/ai/claude"
 import { RECIPE_SUGGESTION_PROMPT } from "@/lib/ai/prompts"
 import type { SuggestionsResponse } from "@/types/suggestions"
@@ -7,37 +7,13 @@ import type { SuggestionsResponse } from "@/types/suggestions"
 // GET - Get recipe suggestions based on inventory
 export async function GET(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as any
-
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
-      )
-    }
+    const { supabase, householdId } = await getAuthenticatedHousehold()
 
     // Fetch inventory items
     const { data: inventoryItems, error: inventoryError } = await supabase
       .from("inventory_items")
       .select("name, quantity, unit, location")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
 
     if (inventoryError) {
       console.error("Error fetching inventory:", inventoryError)
@@ -58,12 +34,17 @@ export async function GET(request: NextRequest) {
     const { data: userRecipes } = await supabase
       .from("recipes")
       .select("title, meal_type, tags")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .limit(20)
 
     // Generate the prompt
     const prompt = RECIPE_SUGGESTION_PROMPT(
-      inventoryItems,
+      inventoryItems.map(item => ({
+        name: item.name,
+        quantity: item.quantity ?? undefined,
+        unit: item.unit ?? undefined,
+        location: item.location,
+      })),
       userRecipes || []
     )
 
@@ -109,10 +90,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(suggestions)
   } catch (error) {
-    console.error("Error generating suggestions:", error)
-    return NextResponse.json(
-      { error: "Failed to generate suggestions" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

@@ -1,40 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedHousehold, handleAuthError } from "@/lib/supabase/auth-helpers"
 
 // POST - Clear all checked items from active shopping list
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient() as any
-
-    // Get current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json(
-        { error: "No household found" },
-        { status: 404 }
-      )
-    }
+    const { supabase, householdId } = await getAuthenticatedHousehold()
 
     // Get active shopping list
     const { data: shoppingList } = await supabase
       .from("shopping_lists")
       .select("id")
-      .eq("household_id", profile.household_id)
+      .eq("household_id", householdId)
       .eq("status", "active")
       .single()
 
@@ -65,10 +41,6 @@ export async function POST(request: NextRequest) {
       itemsRemoved: count || 0
     })
   } catch (error) {
-    console.error("Error clearing checked items:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

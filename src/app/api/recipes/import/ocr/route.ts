@@ -1,21 +1,15 @@
-import { createClient } from "@/lib/supabase/server"
 import { extractRecipeFromImage } from "@/lib/ai/claude"
 import { RECIPE_OCR_PROMPT } from "@/lib/ai/prompts"
 import { NextRequest, NextResponse } from "next/server"
+import {
+  getAuthenticatedHousehold,
+  handleAuthError,
+} from "@/lib/supabase/auth-helpers"
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient() as any
-
-  // Check auth
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
   try {
+    const { supabase, user, householdId } = await getAuthenticatedHousehold()
+
     const formData = await request.formData()
     const image = formData.get("image") as File
 
@@ -40,19 +34,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get user's household
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.household_id) {
-      return NextResponse.json({ error: "No household found" }, { status: 400 })
-    }
-
     // Upload image to Supabase Storage
-    const fileName = `ocr/${profile.household_id}/${Date.now()}-${image.name}`
+    const fileName = `ocr/${householdId}/${Date.now()}-${image.name}`
     const imageBuffer = await image.arrayBuffer()
 
     const { error: uploadError } = await supabase.storage
@@ -92,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     // Log import
     await supabase.from("recipe_imports").insert({
-      household_id: profile.household_id,
+      household_id: householdId,
       imported_by: user.id,
       import_type: "ocr",
       image_url: imageUrl,
@@ -103,15 +86,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ recipe: parsedRecipe })
   } catch (error) {
-    console.error("OCR import error:", error)
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to process image",
-      },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

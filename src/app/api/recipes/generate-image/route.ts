@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedUser, handleAuthError } from "@/lib/supabase/auth-helpers"
 
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient() as any
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const { supabase } = await getAuthenticatedUser()
 
     const { recipeId, title } = await request.json()
 
@@ -77,10 +72,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ imageUrl })
   } catch (error) {
-    console.error("Image search error:", error)
-    return NextResponse.json(
-      { error: "Failed to search for images" },
-      { status: 500 }
-    )
+    return handleAuthError(error)
   }
 }

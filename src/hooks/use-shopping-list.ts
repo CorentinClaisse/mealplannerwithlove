@@ -6,6 +6,7 @@ import type {
   ShoppingListItem,
   ShoppingListItemInput,
 } from "@/types/shopping"
+import { useRealtimeSubscription } from "./use-realtime"
 
 // Fetch active shopping list
 async function fetchShoppingList(): Promise<{ shoppingList: ShoppingList }> {
@@ -69,12 +70,15 @@ async function deleteItem(id: string): Promise<void> {
 
 // Generate from meal plan
 async function generateFromMealPlan(
-  weekStart: string | undefined
+  options: { weekStart?: string; deductInventory?: boolean } | undefined
 ): Promise<{ shoppingList: ShoppingList; itemsAdded: number }> {
   const response = await fetch("/api/shopping-lists/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ weekStart }),
+    body: JSON.stringify({
+      weekStart: options?.weekStart,
+      deductInventory: options?.deductInventory ?? false,
+    }),
   })
 
   if (!response.ok) {
@@ -100,6 +104,12 @@ async function clearCheckedItems(): Promise<{ itemsRemoved: number }> {
 
 // Hooks
 export function useShoppingList() {
+  // Subscribe to realtime changes so other household members see updates
+  useRealtimeSubscription({
+    table: "shopping_list_items",
+    queryKey: ["shoppingList"],
+  })
+
   return useQuery({
     queryKey: ["shoppingList"],
     queryFn: fetchShoppingList,
@@ -212,7 +222,8 @@ export function useGenerateFromMealPlan() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: generateFromMealPlan,
+    mutationFn: (options?: { weekStart?: string; deductInventory?: boolean }) =>
+      generateFromMealPlan(options),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shoppingList"] })
     },
