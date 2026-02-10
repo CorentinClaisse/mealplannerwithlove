@@ -21,6 +21,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useSuggestions } from "@/hooks/use-suggestions"
+import { useAddShoppingItem } from "@/hooks/use-shopping-list"
 import { useQueryClient } from "@tanstack/react-query"
 import type { RecipeSuggestion } from "@/types/suggestions"
 import { cn } from "@/lib/utils/cn"
@@ -146,10 +147,32 @@ export default function SuggestionsPage() {
 
 function SuggestionCard({ suggestion }: { suggestion: RecipeSuggestion }) {
   const [expanded, setExpanded] = useState(false)
+  const [addedToList, setAddedToList] = useState(false)
+  const [isAdding, setIsAdding] = useState(false)
   const router = useRouter()
+  const addShoppingItem = useAddShoppingItem()
 
   const totalTime = suggestion.prepTime + suggestion.cookTime
   const matchPercent = Math.round(suggestion.matchScore * 100)
+
+  const handleAddToShoppingList = async () => {
+    if (suggestion.additionalNeeded.length === 0) return
+    setIsAdding(true)
+    try {
+      for (const ingredient of suggestion.additionalNeeded) {
+        await addShoppingItem.mutateAsync({
+          name: ingredient,
+          quantity: null,
+          category: null,
+        })
+      }
+      setAddedToList(true)
+    } catch (error) {
+      console.error("Failed to add items:", error)
+    } finally {
+      setIsAdding(false)
+    }
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -247,12 +270,17 @@ function SuggestionCard({ suggestion }: { suggestion: RecipeSuggestion }) {
                 variant="outline"
                 size="sm"
                 className="flex-1"
-                onClick={() => {
-                  // TODO: Add missing ingredients to shopping list
-                }}
+                onClick={handleAddToShoppingList}
+                disabled={addedToList || isAdding || suggestion.additionalNeeded.length === 0}
               >
-                <ShoppingCart className="w-4 h-4 mr-1" />
-                Add to list
+                {isAdding ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : addedToList ? (
+                  <Check className="w-4 h-4 mr-1" />
+                ) : (
+                  <ShoppingCart className="w-4 h-4 mr-1" />
+                )}
+                {addedToList ? "Added!" : isAdding ? "Adding..." : "Add to list"}
               </Button>
               <Button
                 size="sm"

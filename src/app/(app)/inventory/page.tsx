@@ -218,7 +218,17 @@ function InventoryItemCard({ item }: { item: InventoryItem }) {
       )}
     >
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm text-foreground">{item.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="font-semibold text-sm text-foreground">{item.name}</p>
+          {item.confidence_score != null && item.confidence_score < 0.8 && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-bold"
+              title={`AI confidence: ${Math.round(item.confidence_score * 100)}%`}
+            >
+              {Math.round(item.confidence_score * 100)}%
+            </span>
+          )}
+        </div>
         {quantityDisplay && (
           <p className="text-xs text-muted-foreground">{quantityDisplay}</p>
         )}

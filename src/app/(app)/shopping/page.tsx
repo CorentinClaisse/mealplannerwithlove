@@ -21,6 +21,7 @@ import {
   useGenerateFromMealPlan,
   useClearCheckedItems,
 } from "@/hooks/use-shopping-list"
+import { useRecipes } from "@/hooks/use-recipes"
 import type { ShoppingListItem } from "@/types/shopping"
 import { ITEM_CATEGORIES } from "@/types/shopping"
 import { cn } from "@/lib/utils/cn"
@@ -34,6 +35,12 @@ export default function ShoppingPage() {
   const addItem = useAddShoppingItem()
   const generateFromPlan = useGenerateFromMealPlan()
   const clearChecked = useClearCheckedItems()
+
+  const { data: recipesData } = useRecipes({})
+  const recipeNameMap = (recipesData?.recipes || []).reduce(
+    (acc, r) => { acc[r.id] = r.title; return acc },
+    {} as Record<string, string>
+  )
 
   const items = data?.shoppingList?.items || []
   const totalItems = items.length
@@ -250,6 +257,7 @@ export default function ShoppingPage() {
             key={category}
             category={category}
             items={groupedItems[category]}
+            recipeNames={recipeNameMap}
           />
         ))}
       </div>
@@ -260,9 +268,11 @@ export default function ShoppingPage() {
 function CategoryGroup({
   category,
   items,
+  recipeNames,
 }: {
   category: string
   items: ShoppingListItem[]
+  recipeNames: Record<string, string>
 }) {
   // Sort: unchecked first, then by name
   const sortedItems = [...items].sort((a, b) => {
@@ -279,14 +289,14 @@ function CategoryGroup({
       </h3>
       <div className="space-y-1.5">
         {sortedItems.map((item) => (
-          <ShoppingItemRow key={item.id} item={item} />
+          <ShoppingItemRow key={item.id} item={item} recipeNames={recipeNames} />
         ))}
       </div>
     </div>
   )
 }
 
-function ShoppingItemRow({ item }: { item: ShoppingListItem }) {
+function ShoppingItemRow({ item, recipeNames }: { item: ShoppingListItem; recipeNames: Record<string, string> }) {
   const updateItem = useUpdateShoppingItem()
   const deleteItem = useDeleteShoppingItem()
 
@@ -331,6 +341,13 @@ function ShoppingItemRow({ item }: { item: ShoppingListItem }) {
         >
           {item.name}
         </span>
+        {item.source_recipe_ids && item.source_recipe_ids.length > 0 && (
+          <p className="text-[10px] text-muted-foreground truncate">
+            for: {item.source_recipe_ids
+              .map((id) => recipeNames[id] || "Recipe")
+              .join(", ")}
+          </p>
+        )}
       </div>
 
       {quantityDisplay && (

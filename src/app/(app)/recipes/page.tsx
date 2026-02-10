@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useRecipes, useToggleFavorite, useDeleteRecipe } from "@/hooks/use-recipes"
 import { useAddShoppingItem } from "@/hooks/use-shopping-list"
 import type { Recipe } from "@/types/recipe"
-import { Plus, Search, Clock, Heart, Import, Loader2, MoreVertical, Edit, Trash2, ShoppingCart } from "lucide-react"
+import { Plus, Search, Clock, Heart, Import, Loader2, MoreVertical, Edit, Trash2, ShoppingCart, FolderOpen } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils/cn"
 import { useDebouncedCallback } from "@/hooks/use-debounce"
@@ -55,6 +55,11 @@ export default function RecipesPage() {
         }
         action={
           <div className="flex gap-2">
+            <Link href="/recipes/collections">
+              <button className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center hover:bg-muted/80 transition-colors">
+                <FolderOpen className="w-5 h-5" />
+              </button>
+            </Link>
             <Link href="/recipes/import">
               <button className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center hover:bg-muted/80 transition-colors">
                 <Import className="w-5 h-5" />
@@ -310,9 +315,16 @@ function RecipeCard({ recipe }: { recipe: Recipe }) {
             <p className="font-bold text-sm text-foreground truncate">
               {recipe.title}
             </p>
-            <div className="flex items-center gap-1 mt-1 text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              <span className="text-xs">{totalTime || "?"} min</span>
+            <div className="flex items-center gap-2 mt-1 text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                <span className="text-xs">{totalTime || "?"} min</span>
+              </span>
+              {recipe.times_cooked > 0 && (
+                <span className="text-xs">
+                  Cooked {recipe.times_cooked}x
+                </span>
+              )}
             </div>
           </div>
         </div>

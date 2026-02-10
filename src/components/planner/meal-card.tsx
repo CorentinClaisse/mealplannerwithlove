@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { Check, ChefHat, Clock, MoreVertical, Trash2 } from "lucide-react"
+import { Check, ChefHat, Clock, MoreVertical, Trash2, Minus, Plus } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useDeleteMealEntry, useToggleMealComplete } from "@/hooks/use-meal-plan"
+import { useDeleteMealEntry, useToggleMealComplete, useUpdateMealEntry } from "@/hooks/use-meal-plan"
 import type { MealEntry } from "@/types/meal-plan"
 import { cn } from "@/lib/utils/cn"
 
@@ -20,6 +20,7 @@ export function MealCard({ entry }: MealCardProps) {
   const buttonRef = useRef<HTMLButtonElement>(null)
   const deleteMealEntry = useDeleteMealEntry()
   const toggleComplete = useToggleMealComplete()
+  const updateEntry = useUpdateMealEntry()
 
   useEffect(() => {
     setIsMounted(true)
@@ -27,6 +28,7 @@ export function MealCard({ entry }: MealCardProps) {
 
   const title = entry.recipe?.title || entry.custom_meal_name || "Meal"
   const isCompleted = entry.is_completed
+  const servings = entry.servings_multiplier || 1
   const totalTime = entry.recipe
     ? (entry.recipe.prep_time_minutes || 0) +
       (entry.recipe.cook_time_minutes || 0)
@@ -140,9 +142,35 @@ export function MealCard({ entry }: MealCardProps) {
             onClick={() => setShowActions(false)}
           />
           <div
-            className="fixed z-[101] bg-background border rounded-lg shadow-lg p-1 min-w-[120px]"
+            className="fixed z-[101] bg-background border rounded-lg shadow-lg p-1 min-w-[140px]"
             style={{ top: menuPosition.top, left: menuPosition.left }}
           >
+            {/* Servings multiplier */}
+            <div className="px-3 py-2">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Servings</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const newVal = Math.max(0.5, servings - 0.5)
+                    updateEntry.mutate({ entryId: entry.id, data: { servingsMultiplier: newVal } })
+                  }}
+                  className="w-6 h-6 rounded-md bg-muted flex items-center justify-center hover:bg-muted/80"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="text-sm font-bold w-8 text-center">{servings}x</span>
+                <button
+                  onClick={() => {
+                    const newVal = servings + 0.5
+                    updateEntry.mutate({ entryId: entry.id, data: { servingsMultiplier: newVal } })
+                  }}
+                  className="w-6 h-6 rounded-md bg-muted flex items-center justify-center hover:bg-muted/80"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+            <div className="border-t border-border my-1" />
             <button
               onClick={handleDelete}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted rounded-md"

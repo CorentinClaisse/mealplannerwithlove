@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useRecipe, useToggleFavorite, useDeleteRecipe, useUpdateRecipeTags } from "@/hooks/use-recipes"
 import { useAddShoppingItem } from "@/hooks/use-shopping-list"
+import { useCollections } from "@/hooks/use-collections"
 import { AddToPlanModal } from "@/components/planner/add-to-plan-modal"
 import {
   ChevronLeft,
@@ -22,6 +23,7 @@ import {
   X,
   Plus,
   ShoppingCart,
+  ChefHat,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils/cn"
@@ -38,12 +40,14 @@ export default function RecipeDetailPage({
   const deleteRecipe = useDeleteRecipe()
   const updateTags = useUpdateRecipeTags()
   const addShoppingItem = useAddShoppingItem()
+  const { collections, addRecipeToCollection, removeRecipeFromCollection, getCollectionsForRecipe } = useCollections()
 
   const recipe = data?.recipe
   const [showAddToPlan, setShowAddToPlan] = useState(false)
   const [tagInput, setTagInput] = useState("")
   const [showTagInput, setShowTagInput] = useState(false)
   const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set())
+  const [showCollectionPicker, setShowCollectionPicker] = useState(false)
 
   const handleDelete = async () => {
     if (confirm("Are you sure you want to delete this recipe?")) {
@@ -183,7 +187,7 @@ export default function RecipeDetailPage({
             )}
 
             {/* Meta info */}
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+            <div className="flex items-center flex-wrap gap-4 text-sm text-muted-foreground mb-3">
               {totalTime > 0 && (
                 <span className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
@@ -194,7 +198,24 @@ export default function RecipeDetailPage({
                 <Users className="w-4 h-4" />
                 {recipe.servings} servings
               </span>
+              {recipe.times_cooked > 0 && (
+                <span className="text-xs">
+                  Cooked {recipe.times_cooked}x
+                </span>
+              )}
             </div>
+
+            {/* Source URL */}
+            {recipe.source_url && (
+              <a
+                href={recipe.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline mb-3"
+              >
+                View original recipe &rarr;
+              </a>
+            )}
 
             {/* Meal Type — toggleable */}
             <div className="flex flex-wrap gap-2 mb-2">
@@ -271,6 +292,69 @@ export default function RecipeDetailPage({
               )}
             </div>
 
+            {/* Collections */}
+            {recipe && (() => {
+              const recipeCollections = getCollectionsForRecipe(recipe.id)
+              const availableCollections = collections.filter(
+                (c) => !c.recipeIds.includes(recipe.id)
+              )
+              return (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {recipeCollections.map((c) => (
+                    <Badge
+                      key={c.id}
+                      variant="outline"
+                      className="gap-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+                      onClick={() => removeRecipeFromCollection(c.id, recipe.id)}
+                    >
+                      {c.emoji} {c.name}
+                      <X className="w-3 h-3" />
+                    </Badge>
+                  ))}
+                  {showCollectionPicker ? (
+                    availableCollections.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {availableCollections.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => {
+                              addRecipeToCollection(c.id, recipe.id)
+                              setShowCollectionPicker(false)
+                            }}
+                            className="h-6 px-2 rounded-full bg-muted text-xs hover:bg-primary/10 hover:text-primary transition-colors"
+                          >
+                            {c.emoji} {c.name}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setShowCollectionPicker(false)}
+                          className="h-6 px-2 rounded-full text-xs text-muted-foreground"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground py-1">
+                        No collections available.{" "}
+                        <Link href="/recipes/collections" className="text-primary hover:underline">
+                          Create one
+                        </Link>
+                      </span>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowCollectionPicker(true)}
+                      className="h-6 px-2 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center gap-1 text-xs"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Collection
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* Actions */}
             <div className="flex items-center gap-2 pt-3 border-t">
               <Button
@@ -281,6 +365,11 @@ export default function RecipeDetailPage({
                 <CalendarPlus className="w-4 h-4 mr-2" />
                 Add to plan
               </Button>
+              <Link href={`/recipes/${id}/cook`}>
+                <Button variant="outline" size="icon" className="h-10 w-10">
+                  <ChefHat className="w-4 h-4" />
+                </Button>
+              </Link>
               <Link href={`/recipes/${id}/edit`}>
                 <Button variant="outline" size="icon" className="h-10 w-10">
                   <Edit className="w-4 h-4" />

@@ -9,7 +9,8 @@ import {
   subWeeks,
   isToday,
 } from "date-fns"
-import { Plus, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Loader2, UtensilsCrossed, Clock } from "lucide-react"
+import Link from "next/link"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { AddMealModal } from "@/components/planner/add-meal-modal"
@@ -107,6 +108,74 @@ export default function PlannerPage() {
           <ChevronRight className="w-5 h-5 text-foreground" />
         </button>
       </div>
+
+      {/* Tonight's Dinner Card */}
+      {!isLoading && !error && (() => {
+        const todayStr = format(new Date(), "yyyy-MM-dd")
+        const todayDinner = data?.entries?.filter(
+          (e) => e.date === todayStr && e.meal_type === "dinner"
+        ) || []
+        const todayLunch = data?.entries?.filter(
+          (e) => e.date === todayStr && e.meal_type === "lunch"
+        ) || []
+        // Show the next upcoming meal: dinner first, or lunch if no dinner
+        const nextMeal = todayDinner.length > 0 ? todayDinner : todayLunch
+        const mealLabel = todayDinner.length > 0 ? "Tonight's Dinner" : "Today's Lunch"
+        const entry = nextMeal[0]
+
+        if (!entry) return null
+
+        const recipe = entry.recipe
+        const totalTime = recipe
+          ? (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)
+          : 0
+
+        return (
+          <div className="px-4 mb-3">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20">
+              <div className="flex items-center gap-4 p-4">
+                {recipe?.image_url ? (
+                  <img
+                    src={recipe.image_url}
+                    alt={recipe.title}
+                    className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <UtensilsCrossed className="w-7 h-7 text-primary" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-primary uppercase tracking-wider">{mealLabel}</p>
+                  <p className="font-bold text-foreground truncate">
+                    {recipe?.title || entry.custom_meal_name || "Meal"}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    {totalTime > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        {totalTime} min
+                      </span>
+                    )}
+                    {nextMeal.length > 1 && (
+                      <span className="text-xs text-muted-foreground">
+                        +{nextMeal.length - 1} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {recipe && (
+                  <Link href={`/recipes/${recipe.id}`}>
+                    <button className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold flex-shrink-0">
+                      View
+                    </button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Loading State */}
       {isLoading && (
