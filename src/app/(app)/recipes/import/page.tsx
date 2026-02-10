@@ -124,6 +124,17 @@ export default function ImportRecipePage() {
             </CardContent>
           </Card>
 
+          {parsedRecipe.imageUrl && (
+            <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={parsedRecipe.imageUrl}
+                alt={parsedRecipe.title}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+
           <Card>
             <CardContent className="p-4 space-y-3">
               <h2 className="font-bold text-lg">{parsedRecipe.title}</h2>
