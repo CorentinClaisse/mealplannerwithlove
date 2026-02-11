@@ -30,6 +30,7 @@ const locationConfig = {
 
 export default function ScanPage() {
   const router = useRouter()
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [location, setLocation] = useState<InventoryLocation>("fridge")
@@ -113,6 +114,9 @@ export default function ScanPage() {
     setImagePreview(null)
     setScanResults(null)
     setSelectedItems(new Set())
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = ""
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -158,36 +162,64 @@ export default function ScanPage() {
       </div>
 
       <div className="px-4 space-y-4">
+        {/* Hidden file inputs */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+
         {/* Image capture/upload area */}
         {!imagePreview ? (
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="overflow-hidden">
+              <CardContent className="p-0">
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-full aspect-square flex flex-col items-center justify-center gap-3 bg-muted/50 hover:bg-muted transition-colors p-4"
+                >
+                  <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Camera className="w-7 h-7 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium text-sm">Take a Photo</p>
+                    <p className="text-xs text-muted-foreground">
+                      Use your camera
+                    </p>
+                  </div>
+                </button>
+              </CardContent>
+            </Card>
 
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full aspect-[4/3] flex flex-col items-center justify-center gap-4 bg-muted/50 hover:bg-muted transition-colors"
-              >
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Camera className="w-8 h-8 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="font-medium">Take a photo or upload image</p>
-                  <p className="text-sm text-muted-foreground">
-                    Point at your {locationConfig[location].label.toLowerCase()}{" "}
-                    contents
-                  </p>
-                </div>
-              </button>
-            </CardContent>
-          </Card>
+            <Card className="overflow-hidden">
+              <CardContent className="p-0">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full aspect-square flex flex-col items-center justify-center gap-3 bg-muted/50 hover:bg-muted transition-colors p-4"
+                >
+                  <div className="w-14 h-14 rounded-full bg-secondary/10 flex items-center justify-center">
+                    <Upload className="w-7 h-7 text-secondary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium text-sm">Upload Image</p>
+                    <p className="text-xs text-muted-foreground">
+                      From your gallery
+                    </p>
+                  </div>
+                </button>
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           <>
             {/* Image preview */}
