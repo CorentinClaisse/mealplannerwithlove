@@ -29,41 +29,83 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extract base64 data
+    // Extract base64 data (strip the data:image/...;base64, prefix)
     const base64Data = image.includes(",") ? image.split(",")[1] : image
 
     // Call Claude Vision to analyze the image
-    const aiResponse = await callClaudeVision(
-      FRIDGE_SCAN_PROMPT,
-      base64Data,
-      mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp"
-    )
+    let aiResponse: string
+    try {
+      aiResponse = await callClaudeVision(
+        FRIDGE_SCAN_PROMPT,
+        base64Data,
+        mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+      )
+    } catch (aiError) {
+      console.error("Claude Vision API error:", aiError)
+      return NextResponse.json(
+        { error: "AI analysis failed. Please check your API key and try again." },
+        { status: 500 }
+      )
+    }
 
-    // Parse AI response
+    // Parse AI response with robust JSON extraction
     let scanResult: FridgeScanResult
 
     try {
-      // Clean up response - remove any markdown formatting
+      // First: try direct parse
       const cleanResponse = aiResponse
         .replace(/```json\n?/g, "")
         .replace(/```\n?/g, "")
         .trim()
 
       scanResult = JSON.parse(cleanResponse)
-    } catch (parseError) {
-      console.error("Failed to parse AI response:", aiResponse)
-      return NextResponse.json(
-        { error: "Failed to parse scan results" },
-        { status: 500 }
-      )
+    } catch {
+      // Second: try to extract JSON object from surrounding text
+      try {
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          scanResult = JSON.parse(jsonMatch[0])
+        } else {
+          console.error("No JSON found in AI response:", aiResponse.slice(0, 500))
+          return NextResponse.json(
+            { error: "Could not parse scan results. Please try again with a clearer photo." },
+            { status: 500 }
+          )
+        }
+      } catch (innerError) {
+        console.error("Failed to parse extracted JSON:", innerError, "\nRaw response:", aiResponse.slice(0, 500))
+        return NextResponse.json(
+          { error: "Could not parse scan results. Please try again with a clearer photo." },
+          { status: 500 }
+        )
+      }
     }
 
-    // Optionally add items to inventory
-    let addedItems: any[] = []
+    // Ensure items array exists
+    if (!scanResult.items || !Array.isArray(scanResult.items)) {
+      scanResult.items = []
+    }
 
-    if (addToInventory && scanResult.items && scanResult.items.length > 0) {
+    // Normalize items — fix quantity type issues (Claude may return strings)
+    scanResult.items = scanResult.items.map((item) => ({
+      ...item,
+      name: String(item.name || "Unknown item"),
+      quantity:
+        typeof item.quantity === "number"
+          ? item.quantity
+          : typeof item.quantity === "string"
+            ? parseFloat(item.quantity) || 1
+            : null,
+      unit: item.unit ? String(item.unit) : null,
+      confidence: typeof item.confidence === "number" ? item.confidence : 0.5,
+    }))
+
+    // Optionally add items to inventory
+    const addedItems: any[] = []
+
+    if (addToInventory && scanResult.items.length > 0) {
       // Filter items with reasonable confidence
-      const validItems = scanResult.items.filter((item) => item.confidence >= 0.5)
+      const validItems = scanResult.items.filter((item) => item.confidence >= 0.3)
 
       for (const item of validItems) {
         // Check if item exists
@@ -111,7 +153,7 @@ export async function POST(request: NextRequest) {
       await supabase.from("fridge_scans").insert({
         household_id: householdId,
         scanned_by: user.id,
-        image_url: "", // We're not storing images for now
+        image_url: "",
         scan_type: location as "fridge" | "freezer" | "pantry" | "receipt",
         raw_ai_response: scanResult as unknown as Json,
         items_detected: scanResult.items.length,
@@ -126,6 +168,7 @@ export async function POST(request: NextRequest) {
       itemsDetected: scanResult.items?.length || 0,
     })
   } catch (error) {
+    console.error("Scan route error:", error)
     return handleAuthError(error)
   }
 }

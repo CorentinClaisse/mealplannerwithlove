@@ -35,19 +35,17 @@ export async function POST(request: NextRequest) {
     const html = await response.text()
     const $ = cheerio.load(html)
 
-    // Try to find JSON-LD structured data first
+    // ── 1. Extract structured data BEFORE any DOM manipulation ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let structuredData: any = null
     $('script[type="application/ld+json"]').each((_, el) => {
       try {
         const data = JSON.parse($(el).html() || "")
 
-        // Handle single recipe
         if (data["@type"] === "Recipe") {
           structuredData = data
         }
 
-        // Handle @graph array
         if (Array.isArray(data["@graph"])) {
           const recipe = data["@graph"].find(
             (item: any) => item["@type"] === "Recipe"
@@ -59,7 +57,68 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Extract metadata
+    // ── 2. Extract image URL BEFORE DOM cleanup ──
+    let pageImageUrl: string | null = null
+
+    // 2a. JSON-LD image (most reliable — recipe sites always have this)
+    if (structuredData) {
+      const ldImage = structuredData.image
+      if (typeof ldImage === "string") {
+        pageImageUrl = ldImage
+      } else if (Array.isArray(ldImage) && ldImage.length > 0) {
+        const first = ldImage[0]
+        pageImageUrl = typeof first === "string" ? first : first?.url || null
+      } else if (ldImage?.url) {
+        pageImageUrl = ldImage.url
+      }
+    }
+
+    // 2b. OpenGraph / Twitter image
+    if (!pageImageUrl) {
+      pageImageUrl =
+        $('meta[property="og:image"]').attr("content") ||
+        $('meta[property="og:image:url"]').attr("content") ||
+        $('meta[name="twitter:image"]').attr("content") ||
+        $('meta[name="twitter:image:src"]').attr("content") ||
+        null
+    }
+
+    // 2c. First substantial image in the page
+    if (!pageImageUrl) {
+      const allImages = $("img[src]")
+        .toArray()
+        .map((img) => ({
+          src: $(img).attr("src") || "",
+          width: parseInt($(img).attr("width") || "0", 10),
+          height: parseInt($(img).attr("height") || "0", 10),
+        }))
+        .filter(
+          (img) =>
+            img.src &&
+            !img.src.includes("icon") &&
+            !img.src.includes("logo") &&
+            !img.src.includes("avatar") &&
+            !img.src.includes("data:image/svg") &&
+            !img.src.endsWith(".svg")
+        )
+
+      // Prefer images with known large dimensions, else take the first
+      const largeImage = allImages.find(
+        (img) => img.width >= 200 || img.height >= 200
+      )
+      pageImageUrl = largeImage?.src || allImages[0]?.src || null
+    }
+
+    // Resolve relative URLs to absolute
+    if (pageImageUrl && !pageImageUrl.startsWith("http")) {
+      try {
+        pageImageUrl = new URL(pageImageUrl, url).toString()
+      } catch {
+        pageImageUrl = null
+      }
+    }
+
+    // ── 3. Extract metadata BEFORE cleanup ──
     const title =
       $('meta[property="og:title"]').attr("content") ||
       $("h1").first().text().trim() ||
@@ -69,19 +128,17 @@ export async function POST(request: NextRequest) {
       $('meta[name="description"]').attr("content") ||
       $('meta[property="og:description"]').attr("content")
 
-    // Remove non-content elements
+    // ── 4. NOW clean up DOM for text extraction ──
     $(
       "script, style, nav, header, footer, aside, .sidebar, .comments, .advertisement, .ad"
     ).remove()
 
-    // Try to find recipe-specific content
     const recipeContent =
       $('[itemtype*="Recipe"]').html() ||
       $(".recipe, .recipe-content, #recipe, article").first().html() ||
       $("main, .content, .post-content").first().html() ||
       $("body").html()
 
-    // Convert to text and limit size
     const mainContent = cheerio
       .load(recipeContent || "")
       .text()
@@ -100,63 +157,20 @@ export async function POST(request: NextRequest) {
     if (description) contentForAI += `DESCRIPTION: ${description}\n`
     contentForAI += `\nPAGE CONTENT:\n${mainContent}`
 
-    // Extract image URL from the page
-    let pageImageUrl: string | null = null
-
-    // 1. Try JSON-LD structured data image
-    if (structuredData) {
-      const ldImage = structuredData.image
-      if (typeof ldImage === "string") {
-        pageImageUrl = ldImage
-      } else if (Array.isArray(ldImage) && ldImage.length > 0) {
-        pageImageUrl = typeof ldImage[0] === "string" ? ldImage[0] : ldImage[0]?.url || null
-      } else if (ldImage?.url) {
-        pageImageUrl = ldImage.url
-      }
-    }
-
-    // 2. Fallback to OpenGraph image
-    if (!pageImageUrl) {
-      pageImageUrl =
-        $('meta[property="og:image"]').attr("content") ||
-        $('meta[name="twitter:image"]').attr("content") ||
-        null
-    }
-
-    // 3. Fallback to first large image in recipe content
-    if (!pageImageUrl) {
-      const recipeImages = $("img[src]")
-        .toArray()
-        .map((img) => $(img).attr("src"))
-        .filter((src): src is string =>
-          !!src && !src.includes("icon") && !src.includes("logo") && !src.includes("avatar")
-        )
-      if (recipeImages.length > 0) {
-        pageImageUrl = recipeImages[0]
-      }
-    }
-
-    // Resolve relative URLs
-    if (pageImageUrl && !pageImageUrl.startsWith("http")) {
-      try {
-        pageImageUrl = new URL(pageImageUrl, url).toString()
-      } catch {
-        pageImageUrl = null
-      }
-    }
-
-    // Use Claude to extract and structure the recipe
+    // ── 5. Use Claude to extract and structure the recipe ──
     const parsedRecipe = await extractRecipeFromText(
       contentForAI,
       URL_EXTRACT_PROMPT
     )
 
-    // Add source URL
     parsedRecipe.sourceUrl = url
     parsedRecipe.sourceType = "url_import"
 
-    // Download and upload the image to Supabase Storage
+    // ── 6. Handle recipe image ──
     if (pageImageUrl) {
+      let uploaded = false
+
+      // Try to download and re-upload to Supabase Storage
       try {
         const imgResponse = await fetch(pageImageUrl, {
           headers: {
@@ -167,7 +181,8 @@ export async function POST(request: NextRequest) {
         })
 
         if (imgResponse.ok) {
-          const contentType = imgResponse.headers.get("content-type") || "image/jpeg"
+          const contentType =
+            imgResponse.headers.get("content-type") || "image/jpeg"
           const imgBuffer = await imgResponse.arrayBuffer()
 
           // Only upload reasonable-size images (under 5MB)
@@ -188,12 +203,19 @@ export async function POST(request: NextRequest) {
                 data: { publicUrl },
               } = supabase.storage.from("recipe-images").getPublicUrl(fileName)
               parsedRecipe.imageUrl = publicUrl
+              uploaded = true
+            } else {
+              console.warn("Supabase upload failed:", uploadError.message)
             }
           }
         }
-      } catch {
-        // Image download/upload failed — continue without image
-        console.warn("Failed to download recipe image from:", pageImageUrl)
+      } catch (err) {
+        console.warn("Failed to download/upload recipe image:", err)
+      }
+
+      // Fallback: use the original external URL directly
+      if (!uploaded) {
+        parsedRecipe.imageUrl = pageImageUrl
       }
     }
 

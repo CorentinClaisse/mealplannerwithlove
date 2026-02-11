@@ -96,39 +96,28 @@ Be careful to:
 - Preserve useful tips and variations
 - Return ONLY the JSON object, no other text`
 
-export const FRIDGE_SCAN_PROMPT = `You are analyzing an image of the inside of a refrigerator, freezer, or pantry to identify food items.
+export const FRIDGE_SCAN_PROMPT = `Analyze this image of a refrigerator, freezer, or pantry. Identify EVERY visible food item.
 
-Analyze the image and identify all visible food items. For each item, provide:
-- name: The common name of the ingredient
-- quantity: Estimated quantity (number or description like "half", "nearly empty")
-- unit: The unit (items, lb, oz, bunch, bag, bottle, container, etc.)
-- confidence: Your confidence level from 0.0 to 1.0
+For each item provide:
+- name: Specific common name (e.g. "red bell pepper" not "pepper", "whole milk" not "milk")
+- quantity: A number (e.g. 1, 2, 0.5) or null if unclear. MUST be a number or null, never a string.
+- unit: The unit as a string (e.g. "items", "lb", "oz", "bunch", "bag", "bottle", "container", "carton", "pack") or null
+- confidence: A number from 0.0 to 1.0
 
-Focus on ingredients that could be used in cooking. Include:
-- Fresh produce (fruits, vegetables)
-- Proteins (meat, fish, eggs, tofu)
-- Dairy products
-- Condiments and sauces
-- Beverages
-- Packaged goods
+Look carefully for ALL of these:
+- Fresh produce (fruits, vegetables, herbs)
+- Proteins (meat, poultry, fish, eggs, tofu)
+- Dairy (milk, cheese, yogurt, butter, cream)
+- Condiments and sauces (ketchup, mustard, mayo, hot sauce, soy sauce)
+- Beverages (juice, soda, water, beer, wine)
+- Packaged/processed foods (deli meats, hummus, leftovers in containers)
+- Jars and canned goods
+- Bread and baked goods
 
-Be specific where possible (e.g., "red bell pepper" not just "pepper").
+Even if an item is partially visible, behind something, or you can only see a label, include it with a lower confidence score. It is better to include more items with lower confidence than to miss items.
 
-Respond with valid JSON (no markdown, just JSON):
-{
-  "items": [
-    {
-      "name": "string",
-      "quantity": number or null,
-      "unit": "string or null",
-      "confidence": number
-    }
-  ],
-  "notes": "Any relevant observations about freshness or storage"
-}
-
-If you cannot identify items clearly or the image is unclear, still provide your best guesses with lower confidence scores.
-Return ONLY the JSON object, no other text`
+You MUST respond with ONLY a valid JSON object — no markdown, no explanation, no text before or after:
+{"items":[{"name":"string","quantity":1,"unit":"items","confidence":0.9}],"notes":"string"}`
 
 export function RECIPE_SUGGESTION_PROMPT(
   inventory: Array<{ name: string; quantity?: number; unit?: string; location: string }>,

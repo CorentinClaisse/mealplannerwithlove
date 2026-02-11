@@ -337,9 +337,11 @@ export default function ScanPage() {
         {scanFridge.isError && (
           <Card className="border-destructive bg-destructive/5">
             <CardContent className="p-3 flex items-center gap-2 text-destructive">
-              <AlertCircle className="w-4 h-4" />
+              <AlertCircle className="w-4 h-4 shrink-0" />
               <p className="text-sm">
-                Failed to scan image. Please try again.
+                {scanFridge.error instanceof Error
+                  ? scanFridge.error.message
+                  : "Failed to scan image. Please try again."}
               </p>
             </CardContent>
           </Card>
