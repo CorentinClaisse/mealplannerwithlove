@@ -109,12 +109,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Invoke the send-invitation-email edge function once deployed:
-    // await supabase.functions.invoke("send-invitation-email", {
-    //   body: { email: email.toLowerCase(), householdId, invitedBy: user.email },
-    // })
+    // Build a shareable invite link the owner can send to their partner
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      request.headers.get("origin") ||
+      "https://mealplannerwithlove.vercel.app"
+    const inviteLink = `${appUrl}/invite/${invitation.id}`
 
-    return NextResponse.json({ invitation }, { status: 201 })
+    return NextResponse.json({ invitation, inviteLink }, { status: 201 })
   } catch (error) {
     return handleAuthError(error)
   }

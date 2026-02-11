@@ -13,6 +13,10 @@ import {
   ArrowLeft,
   Trash2,
   Clock,
+  Copy,
+  Check,
+  Share2,
+  AlertCircle,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
@@ -35,6 +39,10 @@ export default function HouseholdPage() {
   const [inviteEmail, setInviteEmail] = useState("")
   const [householdName, setHouseholdName] = useState("")
   const [isEditingName, setIsEditingName] = useState(false)
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [inviteSuccess, setInviteSuccess] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const { data: profileData, isLoading: profileLoading } = useProfile()
   const { data: invitationsData } = useInvitations()
@@ -67,13 +75,60 @@ export default function HouseholdPage() {
     e.preventDefault()
     if (!inviteEmail.trim()) return
 
+    setInviteError(null)
+
     try {
-      await sendInvitation.mutateAsync({ email: inviteEmail.trim() })
-      setInviteEmail("")
+      const result = await sendInvitation.mutateAsync({
+        email: inviteEmail.trim(),
+      })
+      // The API returns { invitation, inviteLink }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resultAny = result as any
+      const link =
+        resultAny.inviteLink ||
+        `${window.location.origin}/invite/${resultAny.invitation?.id}`
+      setInviteLink(link)
+      setInviteSuccess(true)
       setShowInviteForm(false)
     } catch (error) {
-      console.error("Failed to send invite:", error)
+      setInviteError(
+        error instanceof Error ? error.message : "Failed to send invitation"
+      )
     }
+  }
+
+  const handleCopyLink = async () => {
+    if (!inviteLink) return
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      // Fallback: select text for manual copy
+      const input = document.querySelector<HTMLInputElement>(
+        "input[data-invite-link]"
+      )
+      if (input) {
+        input.select()
+      }
+    }
+  }
+
+  const handleShareLink = async () => {
+    if (!inviteLink) return
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Join my household on Meal Planner",
+          text: `I've invited you to join ${currentHouseholdName} on Meal Planner with Love!`,
+          url: inviteLink,
+        })
+        return
+      } catch {
+        // Share cancelled or not available — fall through to copy
+      }
+    }
+    handleCopyLink()
   }
 
   const handleCancelInvite = async (id: string) => {
@@ -82,6 +137,13 @@ export default function HouseholdPage() {
     } catch (error) {
       console.error("Failed to cancel invite:", error)
     }
+  }
+
+  const handleDismissSuccess = () => {
+    setInviteSuccess(false)
+    setInviteLink(null)
+    setInviteEmail("")
+    setLinkCopied(false)
   }
 
   const handleLeave = async () => {
@@ -243,6 +305,73 @@ export default function HouseholdPage() {
           </Card>
         </div>
 
+        {/* ✅ Invitation sent — success confirmation with shareable link */}
+        {inviteSuccess && inviteLink && (
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-2 px-1">
+              Invitation Sent
+            </h3>
+            <Card className="border-green-200 bg-green-50/50">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                    <Check className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm text-green-800">
+                      Invitation created!
+                    </p>
+                    <p className="text-xs text-green-600">
+                      Share this link with your partner so they can join your
+                      household.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    data-invite-link=""
+                    value={inviteLink}
+                    readOnly
+                    className="text-xs bg-white"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={handleCopyLink}
+                    className="shrink-0"
+                  >
+                    {linkCopied ? (
+                      <Check className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleShareLink}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share link
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleDismissSuccess}
+                  >
+                    Done
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Pending invitations */}
         {isOwner && invitations.length > 0 && (
           <div>
@@ -293,47 +422,67 @@ export default function HouseholdPage() {
             <Card>
               <CardContent className="p-3">
                 {showInviteForm ? (
-                  <form onSubmit={handleSendInvite} className="flex gap-2">
-                    <Input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="partner@email.com"
-                      autoFocus
-                    />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={!inviteEmail.trim() || sendInvitation.isPending}
-                    >
-                      {sendInvitation.isPending ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Send"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        setShowInviteForm(false)
-                        setInviteEmail("")
-                      }}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
+                  <form onSubmit={handleSendInvite} className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => {
+                          setInviteEmail(e.target.value)
+                          setInviteError(null)
+                        }}
+                        placeholder="partner@email.com"
+                        autoFocus
+                      />
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={
+                          !inviteEmail.trim() || sendInvitation.isPending
+                        }
+                      >
+                        {sendInvitation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Send"
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setShowInviteForm(false)
+                          setInviteEmail("")
+                          setInviteError(null)
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    {inviteError && (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <p className="text-xs">{inviteError}</p>
+                      </div>
+                    )}
                   </form>
                 ) : (
                   <button
-                    onClick={() => setShowInviteForm(true)}
+                    onClick={() => {
+                      setShowInviteForm(true)
+                      setInviteSuccess(false)
+                      setInviteLink(null)
+                    }}
                     className="w-full flex items-center gap-3 text-left hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
                   >
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                       <UserPlus className="w-4 h-4 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">Invite your partner</p>
+                      <p className="font-medium text-sm">
+                        Invite your partner
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         Share meal planning together
                       </p>
